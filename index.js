@@ -1,46 +1,84 @@
 const express = require('express');
+
 const app = express();
+const PORT = 3000;
+const FILE_PATH = path.join(__dirname, 'products.json');
 
-// Sample data
-const BookStore = [
-  { id: 1, name: "Harry Potter", author: "J.K Rawling" },
-  { id: 2, name: "Rich Dad Poor Dad", author: "Robert Kiyosaki" },
-  { id: 3, name: "Physcilogy of Money", author: "N/A" },
-  { id: 4, name: "October Junction", author: "Prakash" },
-  { id: 5, name: "Musafir Cafe", author: "Prakash" }
-];
-
-// Middleware
 app.use(express.json());
 
-// Get all books or filter by author
-app.get('/book', (req, res) => {
-  const { author } = req.query;
-  if (author) {
-    const book = BookStore.filter(info => info.author === author);
-    res.json(book);
-  } else {
-    res.json(BookStore);
+function readProducts() {
+  try {
+    const data = fs.readFileSync(FILE_PATH, 'utf-8');
+    return JSON.parse(data || '[]');
+  } catch (err) {
+    return [];
   }
+}
+
+function writeProducts(data) {
+  fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2));
+}
+
+app.get('/products', (req, res) => {
+  const products = readProducts();
+  res.json(products);
 });
 
-
-// Add a new book
-app.post("/book", (req, res) => {
-  const exists = BookStore.some(b => b.id === req.body.id);
-  if (exists) {
-    res.send("Already Available");
-  } else {
-    BookStore.push(req.body);
-    res.send("Data saved Successfully");
-  }
+app.get('/products/instock', (req, res) => {
+  const products = readProducts();
+  const inStock = products.filter(p => p.inStock);
+  res.json(inStock);
 });
 
-app.get('/', (req,res)=>{
-    res.send("This is HOme page.");
-})
+app.post('/products', (req, res) => {
+  const { name, price, inStock } = req.body;
 
+  if (!name || typeof price !== 'number' || typeof inStock !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid product data' });
+  }
 
+  const products = readProducts();
+  const newId = products.length ? Math.max(...products.map(p => p.id)) + 1 : 1;
 
-module.exports = app;
+  const newProduct = { id: newId, name, price, inStock };
+  products.push(newProduct);
 
+  writeProducts(products);
+  res.status(201).json(newProduct);
+});
+
+app.put('/products/:id', (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  let products = readProducts();
+  const index = products.findIndex(p => p.id === parseInt(id));
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+
+  products[index] = { ...products[index], ...updates };
+  writeProducts(products);
+
+  res.json(products[index]);
+});
+
+app.delete('/products/:id', (req, res) => {
+  const { id } = req.params;
+  let products = readProducts();
+
+  const index = products.findIndex(p => p.id === parseInt(id));
+  if (index === -1) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+
+  const deleted = products.splice(index, 1);
+  writeProducts(products);
+
+  res.json({ message: 'Product deleted successfully', product: deleted[0] });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
