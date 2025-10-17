@@ -36,8 +36,11 @@ app.post("/book", (req, res) => {
   }
 });
 
-
+app.get('/', (req,res)=>{
+    res.send("This is HOme page.");
+})
 
 
 
 module.exports = app;
+
